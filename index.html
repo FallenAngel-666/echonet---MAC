@@ -296,6 +296,66 @@
       font-size: 11px;
       color: var(--muted);
     }
+    .btn-action-small {
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: #1E293B;
+      color: #E2E8F0;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-action-small:hover { background: #334155; }
+    .btn-action-small.btn-danger {
+      background: #450A0A;
+      border-color: #991B1B;
+      color: #FCA5A5;
+    }
+    .btn-action-small.btn-danger:hover { background: #DC2626; color: #FFF; }
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(4px);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-box {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 920px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.7);
+    }
+    .modal-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-header h3 { margin: 0; font-size: 15px; color: #FFF; }
+    .modal-body {
+      padding: 14px 18px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .modal-footer {
+      padding: 10px 18px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
   </style>
 </head>
 <body>
@@ -387,7 +447,13 @@
       <div id="map"></div>
 
       <div class="card">
-        <div class="card-title">Emergency Incident Queue</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <div class="card-title" style="margin-bottom:0;">Emergency Incident Queue</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-action-small" onclick="openRequestHistoryModal()" title="View full history archive of all requests">📜 Request History</button>
+            <button class="btn-action-small btn-danger" onclick="clearAllRequests()" title="Clear active queue and reset dashboard">🗑️ Clear Requests</button>
+          </div>
+        </div>
         <div class="tablewrap">
           <table>
             <thead>
@@ -416,6 +482,50 @@
       </div>
     </div>
   </main>
+
+  <!-- REQUEST HISTORY MODAL -->
+  <div class="modal-overlay" id="historyModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>📜 Emergency Request History Archive</h3>
+        <button style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;" onclick="closeRequestHistoryModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+          <input type="text" id="historySearch" placeholder="Search message ID, origin, text..." class="input-box" style="margin-bottom:0;flex:1;min-width:200px;" oninput="filterHistoryTable()">
+          <select id="historyFilter" class="input-box" style="margin-bottom:0;width:auto;" onchange="filterHistoryTable()">
+            <option value="ALL">All Categories</option>
+            <option value="SOS">RED SOS Only</option>
+            <option value="MEDICAL">Medical Only</option>
+            <option value="SUPPLIES">Supplies Only</option>
+          </select>
+          <button class="btn-action-small" onclick="exportHistoryCSV()">📥 Export CSV</button>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time (UTC)</th>
+                <th>Message ID</th>
+                <th>Priority</th>
+                <th>Origin</th>
+                <th>Hops</th>
+                <th>GPS Location</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:14px;">Loading archive...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span style="font-size:11.5px;color:var(--muted);" id="historyRecordCount">0 records archived</span>
+        <button class="btn-action-small" onclick="closeRequestHistoryModal()">Close</button>
+      </div>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -857,9 +967,150 @@
 
     // --- 9. SERVICE WORKER REGISTRATION (PWA) ---
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then(() => log('Offline PWA Service Worker Registered'))
-        .catch(() => {});
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    // --- 10. CLEAR REQUESTS & REQUEST HISTORY ENGINE ---
+    let allHistoricalMessages = [];
+
+    async function clearAllRequests() {
+      if (!confirm("Are you sure you want to clear all active emergency requests from the queue?\n(Historical records will be preserved in Request History).")) {
+        return;
+      }
+
+      // 1. Archive current local messages to history store
+      let current = getStoredMessages();
+      let history = [];
+      try {
+        history = JSON.parse(localStorage.getItem('echonet_history') || '[]');
+      } catch(_) {}
+
+      for (let c of current) {
+        if (!history.some(h => h.message_id === c.message_id)) {
+          history.unshift(c);
+        }
+      }
+      localStorage.setItem('echonet_history', JSON.stringify(history));
+      localStorage.setItem('echonet_messages', '[]');
+
+      // 2. Clear on Gateway server if reachable
+      let gw = document.getElementById('gwUrlInput').value.trim().replace(/\/message\/?$/, '').replace(/\/+$/, '');
+      if (gw) {
+        try {
+          await fetch(`${gw}/api/messages/clear`, { method: 'POST' });
+          log("✓ Cleared active queue on Gateway server.");
+        } catch(_) {}
+      }
+
+      // 3. Clear on Vercel cloud if reachable
+      fetch('/api/messages?action=clear', { method: 'DELETE' }).catch(() => {});
+
+      // 4. Reset UI
+      renderMessages();
+      log("🗑️ Active emergency requests cleared. Dashboard reset.");
+      alert("Active emergency requests cleared!\nPast incidents remain archived in 'Request History'.");
+    }
+
+    async function openRequestHistoryModal() {
+      document.getElementById('historyModal').style.display = 'flex';
+      allHistoricalMessages = [];
+
+      // Load from local storage history
+      let localHistory = [];
+      try {
+        localHistory = JSON.parse(localStorage.getItem('echonet_history') || '[]');
+      } catch(_) {}
+      let localCurrent = getStoredMessages();
+      allHistoricalMessages = [...localCurrent, ...localHistory];
+
+      // Deduplicate
+      let uniqueMap = new Map();
+      for (let m of allHistoricalMessages) {
+        if (!uniqueMap.has(m.message_id)) uniqueMap.set(m.message_id, m);
+      }
+
+      // Try fetching from gateway server
+      let gw = document.getElementById('gwUrlInput').value.trim().replace(/\/message\/?$/, '').replace(/\/+$/, '');
+      if (gw) {
+        try {
+          const res = await fetch(`${gw}/api/messages/history`, { signal: AbortSignal.timeout(2000) });
+          if (res.ok) {
+            const remoteHistory = await res.json();
+            for (let rm of remoteHistory) {
+              uniqueMap.set(rm.message_id, rm);
+            }
+          }
+        } catch(_) {}
+      }
+
+      // Try fetching from Vercel cloud
+      try {
+        const resV = await fetch('/api/messages?action=history', { signal: AbortSignal.timeout(2000) });
+        if (resV.ok) {
+          const vHistory = await resV.json();
+          for (let vm of vHistory) {
+            uniqueMap.set(vm.message_id, vm);
+          }
+        }
+      } catch(_) {}
+
+      allHistoricalMessages = Array.from(uniqueMap.values());
+      allHistoricalMessages.sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+      filterHistoryTable();
+    }
+
+    function closeRequestHistoryModal() {
+      document.getElementById('historyModal').style.display = 'none';
+    }
+
+    function filterHistoryTable() {
+      const query = (document.getElementById('historySearch').value || '').toLowerCase();
+      const cat = document.getElementById('historyFilter').value;
+      const tbody = document.getElementById('historyTableBody');
+
+      let filtered = allHistoricalMessages.filter(m => {
+        if (cat !== 'ALL' && m.type !== cat) return false;
+        if (query) {
+          const s = `${m.message_id} ${m.source_device} ${m.message} ${m.type}`.toLowerCase();
+          if (!s.includes(query)) return false;
+        }
+        return true;
+      });
+
+      document.getElementById('historyRecordCount').textContent = `${filtered.length} of ${allHistoricalMessages.length} records`;
+
+      if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:14px;">No archived records found matching criteria.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(m => `
+        <tr>
+          <td>${new Date(m.created_at).toLocaleString()}</td>
+          <td><strong>${m.message_id}</strong></td>
+          <td><span class="badge ${m.type}">${m.type}</span></td>
+          <td>${m.source_device || 'Unknown'}</td>
+          <td>${m.hop_count || 0}</td>
+          <td>${m.latitude ? m.latitude.toFixed(4) + ', ' + m.longitude.toFixed(4) : 'No GPS'}</td>
+          <td>${m.status || 'ARCHIVED'}</td>
+        </tr>
+      `).join('');
+    }
+
+    function exportHistoryCSV() {
+      if (!allHistoricalMessages.length) return alert('No records to export');
+      let csv = 'Timestamp,Message_ID,Type,Priority,Source_Device,Hop_Count,Latitude,Longitude,Status\n';
+      for (let m of allHistoricalMessages) {
+        csv += `"${m.created_at || ''}","${m.message_id || ''}","${m.type || ''}","${m.priority || ''}","${m.source_device || ''}",${m.hop_count || 0},${m.latitude || ''},${m.longitude || ''},"${m.status || ''}"\n`;
+      }
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `echonet_emergency_history_${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
     }
 
     initPeerMesh();

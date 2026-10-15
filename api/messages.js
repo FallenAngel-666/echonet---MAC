@@ -1,13 +1,23 @@
-// In-memory message store for Vercel Serverless environment
+// In-memory message store & archive for Vercel Serverless environment
 let globalMessages = [];
+let globalHistory = [];
 
 export default function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+
+  // Clear requests endpoint
+  if (req.method === 'DELETE' || (req.method === 'POST' && req.query.action === 'clear')) {
+    const clearedCount = globalMessages.length;
+    // Archive to history
+    globalHistory = [...globalMessages, ...globalHistory];
+    globalMessages = [];
+    return res.status(200).json({ ok: true, cleared_count: clearedCount, message: "Queue cleared" });
   }
 
   if (req.method === 'POST') {
@@ -21,7 +31,9 @@ export default function handler(req, res) {
     if (!exists) {
       msg.received_at = new Date().toISOString();
       globalMessages.unshift(msg);
+      globalHistory.unshift(msg);
       if (globalMessages.length > 500) globalMessages.pop();
+      if (globalHistory.length > 2000) globalHistory.pop();
     }
 
     return res.status(200).json({
@@ -33,6 +45,9 @@ export default function handler(req, res) {
   }
 
   if (req.method === 'GET') {
+    if (req.query.action === 'history') {
+      return res.status(200).json(globalHistory);
+    }
     return res.status(200).json(globalMessages);
   }
 
