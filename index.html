@@ -31,11 +31,11 @@
       background: var(--bg);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 14px;
+      font-size: 13.5px;
       line-height: 1.4;
     }
     header {
-      padding: 14px 20px;
+      padding: 12px 18px;
       background: #111722;
       border-bottom: 1px solid var(--line);
       display: flex;
@@ -45,6 +45,7 @@
       position: sticky;
       top: 0;
       z-index: 1000;
+      flex-wrap: wrap;
     }
     .brand {
       display: flex;
@@ -52,24 +53,24 @@
       gap: 10px;
     }
     .brand img {
-      width: 32px;
-      height: 32px;
+      width: 30px;
+      height: 30px;
       border-radius: 6px;
     }
     .brand-title {
       font-weight: 800;
-      font-size: 16px;
+      font-size: 15px;
       letter-spacing: 1px;
       color: #FFF;
     }
     .brand-sub {
-      font-size: 11px;
+      font-size: 10.5px;
       color: var(--muted);
     }
     .header-nav {
       display: flex;
       background: #0A0E17;
-      padding: 4px;
+      padding: 3px;
       border-radius: 20px;
       border: 1px solid var(--line);
     }
@@ -79,7 +80,7 @@
       background: transparent;
       color: var(--muted);
       border-radius: 16px;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: bold;
       cursor: pointer;
       transition: all 0.2s;
@@ -103,6 +104,33 @@
       flex-wrap: wrap;
       gap: 8px;
     }
+    .gateway-bar {
+      padding: 8px 16px;
+      background: #0F1622;
+      border-bottom: 1px solid var(--line);
+      font-size: 11.5px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .gateway-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .mini-btn {
+      padding: 4px 10px;
+      background: #1E513D;
+      color: #67E3B3;
+      border: 1px solid #2ECC71;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .mini-btn:hover { background: #2ECC71; color: #000; }
     .pill {
       display: inline-flex;
       align-items: center;
@@ -124,6 +152,7 @@
       height: 7px;
       border-radius: 50%;
       background: currentColor;
+      display: inline-block;
     }
     .gps-text {
       color: #38BDF8;
@@ -285,10 +314,31 @@
     </div>
   </header>
 
+  <!-- GATEWAY SYNC BAR (Connects with Laptop Gateway & Phone D) -->
+  <div class="gateway-bar">
+    <div class="gateway-row">
+      <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:280px;">
+        <span class="dot" id="gwDot" style="background:var(--amber)"></span>
+        <strong id="gwStatusText" style="color:var(--muted)">GATEWAY: CONNECTING...</strong>
+        <input type="text" id="gwUrlInput" placeholder="http://172.168.90.244:8000" style="padding:4px 8px;font-size:11px;background:#0A0E17;border:1px solid var(--line);border-radius:4px;color:#85C1E9;font-family:monospace;flex:1;min-width:180px;">
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="mini-btn" onclick="saveAndSyncGateway()">CONNECT & SYNC</button>
+      </div>
+    </div>
+    <div class="gateway-row" style="border-top:1px dashed var(--line);padding-top:4px;">
+      <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:280px;">
+        <span style="color:var(--muted)">Peer Link:</span>
+        <input type="text" id="peerInput" placeholder="Enter target Peer ID (e.g. echo-web-1234)" style="padding:4px 8px;font-size:11px;background:#0A0E17;border:1px solid var(--line);border-radius:4px;color:#FFF;flex:1;min-width:180px;">
+      </div>
+      <button class="mini-btn" style="background:#1E3A8A;border-color:#3B82F6;color:#BFDBFE;" onclick="connectToPeer()">LINK PEER</button>
+    </div>
+  </div>
+
   <div class="status-bar">
     <div style="display:flex;align-items:center;gap:8px;">
       <span class="pill" id="peerPill"><span class="dot"></span><span id="peerCountText">P2P MESH: 0 PEERS</span></span>
-      <span style="color:var(--muted)">Node: <strong style="color:#FFF" id="myNodeId">—</strong></span>
+      <span style="color:var(--muted)">My Node ID: <strong style="color:#FFF" id="myNodeId">—</strong></span>
     </div>
     <div class="gps-text" id="gpsDisplay">📍 GPS: Acquiring...</div>
   </div>
@@ -322,12 +372,12 @@
         <div style="font-size:12.5px;color:var(--muted);line-height:1.6;" id="storageStatusText">
           ✓ Device SQLite storage ready.<br>
           • Emergency calls are stored safely in local memory even with 0% cellular signal.<br>
-          • Packets automatically hop across nearby devices via WebRTC & Bluetooth data channels.
+          • Packets automatically hop across nearby devices via WebRTC & Gateway sync.
         </div>
       </div>
 
       <div class="card">
-        <div class="card-title">Live P2P Mesh Activity</div>
+        <div class="card-title">Live P2P Mesh & Gateway Activity</div>
         <div class="log-box" id="victimLog"></div>
       </div>
     </div>
@@ -378,7 +428,94 @@
     }
     document.getElementById('myNodeId').textContent = myNodeId;
 
-    // --- 2. GPS LOCATION ENGINE ---
+    // --- 2. GATEWAY CONFIGURATION & AUTO-POLL ENGINE ---
+    // Default fallback tries current origin, localhost:8000, or local Wi-Fi IP
+    let defaultGw = localStorage.getItem('echonet_gateway_url');
+    if (!defaultGw) {
+      if (window.location.protocol === 'file:' || !window.location.host) {
+        defaultGw = 'http://127.0.0.1:8000';
+      } else if (window.location.port === '8000') {
+        defaultGw = window.location.origin;
+      } else {
+        defaultGw = 'http://172.168.90.244:8000';
+      }
+    }
+    document.getElementById('gwUrlInput').value = defaultGw;
+
+    function saveAndSyncGateway() {
+      const url = document.getElementById('gwUrlInput').value.trim().replace(/\/message\/?$/, '').replace(/\/+$/, '');
+      localStorage.setItem('echonet_gateway_url', url);
+      log(`Gateway set to: ${url}. Testing connection...`);
+      pollGateway();
+    }
+
+    async function pollGateway() {
+      let url = document.getElementById('gwUrlInput').value.trim().replace(/\/message\/?$/, '').replace(/\/+$/, '');
+      if (!url) return;
+
+      try {
+        const [mr, er] = await Promise.all([
+          fetch(`${url}/api/messages`, { signal: AbortSignal.timeout(2200) }),
+          fetch(`${url}/api/evacuation`, { signal: AbortSignal.timeout(2200) })
+        ]);
+
+        if (mr.ok) {
+          const remoteMsgs = await mr.json();
+          mergeRemoteMessages(remoteMsgs);
+          document.getElementById('gwDot').style.background = 'var(--green)';
+          document.getElementById('gwStatusText').textContent = `GATEWAY ONLINE (${remoteMsgs.length} MSGS)`;
+          document.getElementById('gwStatusText').style.color = 'var(--green)';
+        } else {
+          throw new Error('HTTP ' + mr.status);
+        }
+
+        if (er.ok) {
+          const evacs = await er.json();
+          if (evacs && evacs.length > 0 && !evacs[0].is_cancelled) {
+            handleEvacAlert(evacs[0]);
+          }
+        }
+      } catch(e) {
+        document.getElementById('gwDot').style.background = 'var(--red)';
+        document.getElementById('gwStatusText').textContent = 'GATEWAY OFFLINE (Check IP)';
+        document.getElementById('gwStatusText').style.color = 'var(--red)';
+      }
+    }
+
+    function mergeRemoteMessages(remoteList) {
+      let local = getStoredMessages();
+      let updated = false;
+      for (let rm of remoteList) {
+        if (!local.some(lm => lm.message_id === rm.message_id)) {
+          local.unshift({
+            message_id: rm.message_id,
+            type: rm.type || 'SOS',
+            priority: rm.priority || 'CRITICAL',
+            source_device: rm.source_device || 'Phone D',
+            message: rm.message || 'Emergency signal',
+            created_at: rm.created_at || new Date().toISOString(),
+            latitude: rm.latitude,
+            longitude: rm.longitude,
+            accuracy_meters: rm.accuracy_meters,
+            hop_count: rm.hop_count || 0,
+            status: rm.status || 'GATEWAY_DELIVERED'
+          });
+          updated = true;
+        }
+      }
+      if (updated) {
+        localStorage.setItem('echonet_messages', JSON.stringify(local));
+        renderMessages();
+        playAlertSound();
+        log(`✓ Pulled new messages from gateway! Total: ${local.length}`);
+      }
+    }
+
+    // Auto-poll gateway every 2.5 seconds
+    setInterval(pollGateway, 2500);
+    setTimeout(pollGateway, 500);
+
+    // --- 3. GPS LOCATION ENGINE ---
     let currentLat = null, currentLon = null, currentAcc = null;
     function initGPS() {
       if ('geolocation' in navigator) {
@@ -401,7 +538,7 @@
     }
     initGPS();
 
-    // --- 3. STORAGE & DEDUPLICATION ENGINE ---
+    // --- 4. STORAGE & DEDUPLICATION ENGINE ---
     function getStoredMessages() {
       try {
         return JSON.parse(localStorage.getItem('echonet_messages') || '[]');
@@ -416,15 +553,16 @@
       }
     }
 
-    // --- 4. WEBRTC P2P MESH ENGINE (PeerJS) ---
+    // --- 5. WEBRTC P2P MESH ENGINE (PeerJS) ---
     const connectedPeers = new Map();
     let peer = null;
 
     function initPeerMesh() {
       try {
-        peer = new Peer(myNodeId.toLowerCase().replace(/[^a-z0-9]/g, ''));
+        const cleanId = myNodeId.toLowerCase().replace(/[^a-z0-9]/g, '');
+        peer = new Peer(cleanId);
         peer.on('open', id => {
-          log(`P2P Mesh Active. Network ID: ${id}`);
+          log(`P2P WebRTC Mesh Active. My ID: ${id}`);
         });
         peer.on('connection', conn => {
           setupConnection(conn);
@@ -437,13 +575,25 @@
       }
     }
 
+    function connectToPeer() {
+      const target = document.getElementById('peerInput').value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!target) return alert('Enter a Peer ID to connect');
+      if (peer && target === peer.id) return alert('Cannot connect to own node ID');
+      if (connectedPeers.has(target)) return alert('Already connected to ' + target);
+
+      log(`Requesting P2P link with: ${target}...`);
+      const conn = peer.connect(target);
+      setupConnection(conn);
+    }
+
     function setupConnection(conn) {
       conn.on('open', () => {
         connectedPeers.set(conn.peer, conn);
         updatePeerUI();
-        log(`Linked with peer node: ${conn.peer}`);
-        // Inventory sync
-        conn.send({ kind: 'INVENTORY_REQ' });
+        log(`✓ Linked with peer node: ${conn.peer}`);
+        // Send inventory of stored message IDs
+        const ids = getStoredMessages().map(m => m.message_id);
+        conn.send({ kind: 'INVENTORY', ids: ids, sender: myNodeId });
       });
       conn.on('data', data => {
         handleIncomingData(data, conn.peer);
@@ -491,7 +641,7 @@
 
         saveMessage(msg);
         playAlertSound();
-        log(`RECEIVED [${msg.type}] from ${fromPeer}. Hops: ${msg.hop_count}`);
+        log(`RECEIVED [${msg.type}] from ${fromPeer}. Origin: ${msg.source_device}, Hops: ${msg.hop_count}`);
 
         // Forward to other peers
         const outgoing = Object.assign({}, msg, {
@@ -499,12 +649,34 @@
           last_hop: myNodeId
         });
         broadcastEnvelope({ kind: 'DATA', message: outgoing }, fromPeer);
+
+        // Attempt gateway delivery
+        let gw = document.getElementById('gwUrlInput').value.trim().replace(/\/message\/?$/, '').replace(/\/+$/, '');
+        if (gw) {
+          fetch(`${gw}/message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(msg)
+          }).catch(() => {});
+        }
       } else if (env.kind === 'EVAC') {
         handleEvacAlert(env.alert);
+      } else if (env.kind === 'INVENTORY') {
+        // Store and forward sync
+        const peerIds = env.ids || [];
+        const myMsgs = getStoredMessages();
+        for (let m of myMsgs) {
+          if (!peerIds.includes(m.message_id)) {
+            const conn = connectedPeers.get(fromPeer);
+            if (conn && conn.open) {
+              conn.send({ kind: 'DATA', message: m });
+            }
+          }
+        }
       }
     }
 
-    // --- 5. EMERGENCY DISPATCH ---
+    // --- 6. EMERGENCY DISPATCH ---
     function triggerSOS(type, severity) {
       playAlertSound();
       const msgId = `MSG-${myNodeId}-${Date.now().toString().slice(-6)}`;
@@ -527,15 +699,20 @@
       saveMessage(msg);
       log(`BROADCAST [${type}]: ${msgId} at GPS ${currentLat ? currentLat.toFixed(4) + ',' + currentLon.toFixed(4) : 'Pending'}`);
       
-      // Relay to mesh
+      // Relay across WebRTC peers
       broadcastEnvelope({ kind: 'DATA', message: msg });
 
-      // Try local gateway sync if on rescue laptop Wi-Fi
-      fetch('http://127.0.0.1:8000/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(msg)
-      }).catch(() => {});
+      // Deliver to Rescue Gateway Laptop
+      let gw = document.getElementById('gwUrlInput').value.trim().replace(/\/message\/?$/, '').replace(/\/+$/, '');
+      if (gw) {
+        fetch(`${gw}/message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(msg)
+        }).then(r => {
+          if (r.ok) log(`✓ Delivered to gateway (${gw})`);
+        }).catch(() => {});
+      }
 
       // Try Vercel cloud sync
       fetch('/api/messages', {
@@ -544,7 +721,7 @@
         body: JSON.stringify(msg)
       }).catch(() => {});
 
-      alert(`EMERGENCY ${type} DISPATCHED!\nSaved in local storage and relayed to mesh.`);
+      alert(`EMERGENCY ${type} DISPATCHED!\nSaved locally and relayed to mesh & gateway.`);
     }
 
     function handleEvacAlert(a) {
@@ -552,7 +729,6 @@
       banner.style.display = 'block';
       document.getElementById('evacAreaTitle').textContent = `⚠️ EVACUATION: ${a.affected_area || 'ALL SECTORS'}`;
       document.getElementById('evacInstructionsText').textContent = a.instructions;
-      playAlertSound();
     }
 
     function broadcastEvacuation() {
@@ -570,15 +746,26 @@
 
       handleEvacAlert(alertObj);
       broadcastEnvelope({ kind: 'EVAC', alert: alertObj });
+
+      let gw = document.getElementById('gwUrlInput').value.trim().replace(/\/message\/?$/, '').replace(/\/+$/, '');
+      if (gw) {
+        fetch(`${gw}/api/evacuation`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(alertObj)
+        }).catch(() => {});
+      }
+
       fetch('/api/evacuation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(alertObj)
       }).catch(() => {});
-      alert('Evacuation broadcast dispatched across mesh!');
+
+      alert('Evacuation broadcast dispatched across mesh & gateway!');
     }
 
-    // --- 6. AUDIO ALARM ---
+    // --- 7. AUDIO ALARM ---
     function playAlertSound() {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -596,7 +783,7 @@
       } catch(_) {}
     }
 
-    // --- 7. UI & MAP MANAGEMENT ---
+    // --- 8. UI & MAP MANAGEMENT ---
     let map = null;
     let markers = [];
 
@@ -668,7 +855,7 @@
       box.prepend(d);
     }
 
-    // --- 8. SERVICE WORKER REGISTRATION (PWA) ---
+    // --- 9. SERVICE WORKER REGISTRATION (PWA) ---
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
         .then(() => log('Offline PWA Service Worker Registered'))
