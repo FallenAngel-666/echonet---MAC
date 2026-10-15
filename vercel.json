@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "routes": [
+    {
+      "src": "/api/messages",
+      "dest": "/api/messages.js"
+    },
+    {
+      "src": "/api/evacuation",
+      "dest": "/api/evacuation.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ]
+}
