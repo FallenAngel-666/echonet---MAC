@@ -747,6 +747,10 @@
       document.getElementById('btGuideModal').style.display = 'none';
     }
 
+    const ECHONET_SERVICE_UUID = '0000fe2c-0000-1000-8000-00805f9b34fb';
+    const ECHONET_CHAR_UUID = '0000fe2d-0000-1000-8000-00805f9b34fb';
+    let bluetoothTxChar = null;
+
     async function connectPhoneDBluetooth() {
       if (!navigator.bluetooth) {
         log("Notice: Apple Safari restricts Web Bluetooth. Opening iPhone setup guide...");
@@ -761,7 +765,7 @@
         bluetoothDevice = await navigator.bluetooth.requestDevice({
           acceptAllDevices: true,
           optionalServices: [
-            '0000fe2c-0000-1000-8000-00805f9b34fb', // Google Nearby Connections / Mesh
+            ECHONET_SERVICE_UUID,
             '0000180a-0000-1000-8000-00805f9b34fb', // Device Info
             '00001800-0000-1000-8000-00805f9b34fb', // Generic Access
             'battery_service'
@@ -775,6 +779,15 @@
 
         bluetoothGattServer = await bluetoothDevice.gatt.connect();
         isPhoneDConnected = true;
+
+        // Discover EchoNet write characteristic if available
+        try {
+          const service = await bluetoothGattServer.getPrimaryService(ECHONET_SERVICE_UUID);
+          bluetoothTxChar = await service.getCharacteristic(ECHONET_CHAR_UUID);
+          log("✓ Discovered EchoNet BLE GATT Service on Phone D! Full two-way mesh active.");
+        } catch(gErr) {
+          log(`GATT note: ${gErr.message}`);
+        }
 
         updateBTStatus('CONNECTED', `CONNECTED: ${bluetoothDevice.name || 'PHONE D'}`);
         document.getElementById('btnConnectBT').style.display = 'none';
@@ -802,6 +815,7 @@
 
     function onBTDisconnected() {
       isPhoneDConnected = false;
+      bluetoothTxChar = null;
       updateBTStatus('DISCONNECTED', 'BLE DISCONNECTED');
       document.getElementById('btnConnectBT').style.display = 'inline-block';
       document.getElementById('btnDisconnectBT').style.display = 'none';
@@ -830,6 +844,18 @@
         msg.hop_count = (msg.hop_count || 0) + 1;
         msg.last_hop = bluetoothDevice.name || 'Phone D (BLE)';
         msg.status = 'RELAYED_TO_PHONE_D_BLE';
+
+        // Write directly to Phone D's Android GATT Characteristic if available
+        if (bluetoothTxChar) {
+          try {
+            const encoder = new TextEncoder();
+            const payloadBytes = encoder.encode(JSON.stringify(msg));
+            await bluetoothTxChar.writeValue(payloadBytes);
+            log(`✓ Wrote ${payloadBytes.length} bytes to Phone D GATT Characteristic!`);
+          } catch(wErr) {
+            log(`[BLE Write Note] ${wErr.message}`);
+          }
+        }
 
         log(`📡 Transmitted ${msg.type} [${msg.message_id}] over Bluetooth BLE to Phone D (Hop ${msg.hop_count})!`);
         
@@ -1081,24 +1107,24 @@
 
       // 3. Deliver to Rescue Gateway Laptop / Phone D IP
       let gw = document.getElementById('gwUrlInput').value.trim().replace(/\/message\/?$/, '').replace(/\/+$/, '');
-      if (gw && gw !== window.location.origin) {
-        fetch(`${gw}/message`, {
+      const endpointsToTry = [];
+      if (gw) {
+        endpointsToTry.push(`${gw}/message`);
+        endpointsToTry.push(`${gw}/api/messages`);
+      }
+      endpointsToTry.push('/message');
+      endpointsToTry.push('/api/messages');
+
+      const uniqueEndpoints = [...new Set(endpointsToTry)];
+      for (let ep of uniqueEndpoints) {
+        fetch(ep, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(msg)
         }).then(r => {
-          if (r.ok) log(`✓ Delivered to gateway (${gw})`);
+          if (r.ok) log(`✓ Delivered emergency packet to: ${ep}`);
         }).catch(() => {});
       }
-
-      // 4. Deliver to Vercel Cloud Relay (Always active)
-      fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(msg)
-      }).then(r => {
-        if (r.ok) log("✓ Synced to Vercel Cloud Mesh.");
-      }).catch(() => {});
 
       let relayNotice = isPhoneDConnected ? "Relayed to Phone D via Bluetooth BLE" : "Saved locally and relayed to mesh & gateway";
       alert(`EMERGENCY ${type} DISPATCHED!\n${relayNotice}.`);
