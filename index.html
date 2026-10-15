@@ -848,10 +848,26 @@
         // Write directly to Phone D's Android GATT Characteristic if available
         if (bluetoothTxChar) {
           try {
+            const blePacket = JSON.stringify({
+              id: msg.message_id,
+              t: msg.type,
+              p: msg.priority,
+              src: msg.source_device,
+              msg: msg.message,
+              lat: msg.latitude,
+              lon: msg.longitude,
+              hops: msg.hop_count
+            });
             const encoder = new TextEncoder();
-            const payloadBytes = encoder.encode(JSON.stringify(msg));
-            await bluetoothTxChar.writeValue(payloadBytes);
-            log(`✓ Wrote ${payloadBytes.length} bytes to Phone D GATT Characteristic!`);
+            const payloadBytes = encoder.encode(blePacket);
+            if (typeof bluetoothTxChar.writeValueWithResponse === 'function') {
+              await bluetoothTxChar.writeValueWithResponse(payloadBytes);
+            } else if (typeof bluetoothTxChar.writeValueWithoutResponse === 'function') {
+              await bluetoothTxChar.writeValueWithoutResponse(payloadBytes);
+            } else {
+              await bluetoothTxChar.writeValue(payloadBytes);
+            }
+            log(`✓ Successfully transmitted ${payloadBytes.length} bytes to Phone D over Bluetooth BLE!`);
           } catch(wErr) {
             log(`[BLE Write Note] ${wErr.message}`);
           }
