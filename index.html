@@ -1382,7 +1382,7 @@
           <td>${m.source_device}</td>
           <td>${m.hop_count || 0}</td>
           <td>${(m.latitude && m.longitude) 
-            ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${m.latitude},${m.longitude}" target="_blank" rel="noopener noreferrer" style="color:var(--primary);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px;" title="Open Google Maps Directions">🧭 ${m.latitude.toFixed(4)}, ${m.longitude.toFixed(4)}</a> <a href="https://www.google.com/maps/dir/?api=1&destination=${m.latitude},${m.longitude}" target="_blank" rel="noopener noreferrer" style="background:var(--primary);color:#fff;padding:2px 6px;border-radius:4px;text-decoration:none;font-size:10px;font-weight:600;margin-left:4px;display:inline-block;">Directions</a>`
+            ? `<a href="https://www.google.com/maps/dir//${m.latitude},${m.longitude}" target="_blank" rel="noopener noreferrer" style="color:var(--primary);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px;" title="Open Google Maps Directions">🧭 ${m.latitude.toFixed(4)}, ${m.longitude.toFixed(4)}</a> <a href="https://www.google.com/maps/dir//${m.latitude},${m.longitude}" target="_blank" rel="noopener noreferrer" style="background:var(--primary);color:#fff;padding:2px 6px;border-radius:4px;text-decoration:none;font-size:10px;font-weight:600;margin-left:4px;display:inline-block;">Directions</a>`
             : '<span style="color:var(--muted)">No GPS</span>'}</td>
           <td>
             ${m.status || 'SAVED'}
@@ -1396,7 +1396,7 @@
         markers = [];
         msgs.forEach(m => {
           if (m.latitude && m.longitude) {
-            const dirUrl = `https://www.google.com/maps/dir/?api=1&destination=${m.latitude},${m.longitude}`;
+            const dirUrl = `https://www.google.com/maps/dir//${m.latitude},${m.longitude}`;
             const mk = L.marker([m.latitude, m.longitude])
               .bindPopup(`
                 <b style="color:#0f172a;font-size:13px;">${m.type} [${m.message_id}]</b>
@@ -1550,7 +1550,7 @@
           <td>${m.source_device || 'Unknown'}</td>
           <td>${m.hop_count || 0}</td>
           <td>${(m.latitude && m.longitude) 
-            ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${m.latitude},${m.longitude}" target="_blank" rel="noopener noreferrer" style="color:var(--primary);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px;" title="Open Google Maps Directions">🧭 ${m.latitude.toFixed(4)}, ${m.longitude.toFixed(4)}</a> <a href="https://www.google.com/maps/dir/?api=1&destination=${m.latitude},${m.longitude}" target="_blank" rel="noopener noreferrer" style="background:var(--primary);color:#fff;padding:2px 6px;border-radius:4px;text-decoration:none;font-size:10px;font-weight:600;margin-left:4px;display:inline-block;">Directions</a>`
+            ? `<a href="https://www.google.com/maps/dir//${m.latitude},${m.longitude}" target="_blank" rel="noopener noreferrer" style="color:var(--primary);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px;" title="Open Google Maps Directions">🧭 ${m.latitude.toFixed(4)}, ${m.longitude.toFixed(4)}</a> <a href="https://www.google.com/maps/dir//${m.latitude},${m.longitude}" target="_blank" rel="noopener noreferrer" style="background:var(--primary);color:#fff;padding:2px 6px;border-radius:4px;text-decoration:none;font-size:10px;font-weight:600;margin-left:4px;display:inline-block;">Directions</a>`
             : '<span style="color:var(--muted)">No GPS</span>'}</td>
           <td>${m.status || 'ARCHIVED'}</td>
         </tr>
