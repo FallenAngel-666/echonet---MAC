@@ -11,6 +11,17 @@ export default function handler(req, res) {
     return res.status(200).end();
   }
 
+  // Single message delete
+  if (req.method === 'DELETE' && req.query.id) {
+    const targetId = req.query.id;
+    const target = globalMessages.find(m => m.message_id === targetId);
+    if (target) {
+      if (!globalHistory.some(h => h.message_id === target.message_id)) globalHistory.unshift(target);
+      globalMessages = globalMessages.filter(m => m.message_id !== targetId);
+    }
+    return res.status(200).json({ ok: true, deleted_id: targetId });
+  }
+
   // Clear requests endpoint
   if (req.method === 'DELETE' || (req.method === 'POST' && req.query.action === 'clear')) {
     const clearedCount = globalMessages.length;

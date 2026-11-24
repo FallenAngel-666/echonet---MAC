@@ -394,6 +394,7 @@
     <div class="header-nav">
       <button class="nav-btn active" id="btnModeVictim" onclick="setMode('victim')">🚨 VICTIM SOS</button>
       <button class="nav-btn" id="btnModeCommander" onclick="setMode('commander')">🛰️ COMMAND</button>
+      <button class="nav-btn" id="btnModeGeoLoc" onclick="setMode('geoloc')">📍 GEO LOC</button>
     </div>
   </header>
 
@@ -1302,19 +1303,35 @@
       const cView = document.getElementById('commanderView');
       const bVictim = document.getElementById('btnModeVictim');
       const bCommander = document.getElementById('btnModeCommander');
+      const bGeoLoc = document.getElementById('btnModeGeoLoc');
 
       if (mode === 'victim') {
         vView.style.display = 'flex';
         cView.style.display = 'none';
         bVictim.className = 'nav-btn active';
         bCommander.className = 'nav-btn';
-      } else {
+        if (bGeoLoc) bGeoLoc.className = 'nav-btn';
+      } else if (mode === 'commander') {
         vView.style.display = 'none';
         cView.style.display = 'flex';
         bVictim.className = 'nav-btn';
         bCommander.className = 'nav-btn active commander';
+        if (bGeoLoc) bGeoLoc.className = 'nav-btn';
         if (!map) initMap();
         renderMessages();
+      } else if (mode === 'geoloc') {
+        vView.style.display = 'none';
+        cView.style.display = 'flex';
+        bVictim.className = 'nav-btn';
+        bCommander.className = 'nav-btn';
+        if (bGeoLoc) bGeoLoc.className = 'nav-btn active';
+        if (!map) initMap();
+        renderMessages();
+        const mapEl = document.getElementById('map');
+        if (mapEl) {
+          mapEl.scrollIntoView({ behavior: 'smooth' });
+          map.invalidateSize();
+        }
       }
     }
 
@@ -1323,6 +1340,31 @@
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap'
       }).addTo(map);
+    }
+
+    async function deleteSingleVercelMessage(msgId) {
+      if (!confirm(`Delete emergency incident "${msgId}" from the active queue?`)) return;
+      let msgs = getStoredMessages();
+      const target = msgs.find(m => m.message_id === msgId);
+      if (target) {
+        let history = [];
+        try { history = JSON.parse(localStorage.getItem('echonet_history') || '[]'); } catch(_) {}
+        if (!history.some(h => h.message_id === target.message_id)) history.unshift(target);
+        localStorage.setItem('echonet_history', JSON.stringify(history));
+      }
+      msgs = msgs.filter(m => m.message_id !== msgId);
+      localStorage.setItem('echonet_messages', JSON.stringify(msgs));
+
+      // Gateway sync
+      let gw = document.getElementById('gwUrlInput').value.trim().replace(/\/message\/?$/, '').replace(/\/+$/, '');
+      if (gw) {
+        fetch(`${gw}/api/messages/${encodeURIComponent(msgId)}`, { method: 'DELETE' }).catch(() => {});
+      }
+      // Vercel cloud sync
+      fetch(`/api/messages?action=delete&id=${encodeURIComponent(msgId)}`, { method: 'DELETE' }).catch(() => {});
+
+      renderMessages();
+      log(`🗑️ Deleted incident ${msgId}.`);
     }
 
     function renderMessages() {
@@ -1342,7 +1384,10 @@
           <td>${(m.latitude && m.longitude) 
             ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${m.latitude},${m.longitude}" target="_blank" rel="noopener noreferrer" style="color:var(--primary);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px;" title="Open Google Maps Directions">🧭 ${m.latitude.toFixed(4)}, ${m.longitude.toFixed(4)}</a> <a href="https://www.google.com/maps/dir/?api=1&destination=${m.latitude},${m.longitude}" target="_blank" rel="noopener noreferrer" style="background:var(--primary);color:#fff;padding:2px 6px;border-radius:4px;text-decoration:none;font-size:10px;font-weight:600;margin-left:4px;display:inline-block;">Directions</a>`
             : '<span style="color:var(--muted)">No GPS</span>'}</td>
-          <td>${m.status || 'SAVED'}</td>
+          <td>
+            ${m.status || 'SAVED'}
+            <button onclick="deleteSingleVercelMessage('${m.message_id}')" title="Delete request" style="background:#450A0A;border:1px solid #991B1B;color:#FCA5A5;border-radius:4px;padding:2px 6px;font-size:10px;cursor:pointer;margin-left:6px;">🗑️</button>
+          </td>
         </tr>
       `).join('');
 
